@@ -88,6 +88,7 @@ void Engine::LoadScene(const HairInfo& hairInfo, const HeadInfo& headInfo, ExpOp
 
 void Engine::InitWindow(const HairInfo& hairInfo, const HeadInfo& headInfo, ExpOpt opt)
 {
+    glfwSetErrorCallback(error_callback);
     if (!glfwInit()) {
         exit(EXIT_FAILURE);
     }
@@ -132,7 +133,7 @@ void Engine::InitWindow(const HairInfo& hairInfo, const HeadInfo& headInfo, ExpO
 
 void Engine::error_callback(int error, const char* description)
 {
-    fputs(description, stderr);
+    fprintf(stderr, "GLFW error %d: %s\n", error, description);
 }
 
 void Engine::mouse_callback(GLFWwindow* window, double x, double y)

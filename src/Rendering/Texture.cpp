@@ -1,5 +1,5 @@
 #include "Texture.h"
-#include "freeImage/FreeImage.h"
+#include <FreeImage.h>
 
 Texture::Texture()
 : m_id(0),

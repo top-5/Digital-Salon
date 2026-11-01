@@ -104,7 +104,7 @@ class Face
 public: 
     Face(uint _a, uint _b, uint _c) : a(_a), b(_b), c(_c) {}
     Face(const Face &f) : a(f.a), b(f.b), c(f.c) {}    
-    Face &operator = (const Face &f) { a = f.a; b = f.b; c = f.c; }
+    Face &operator = (const Face &f) { a = f.a; b = f.b; c = f.c; return *this; }
 
     uint a, b, c;
 };

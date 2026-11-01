@@ -1,13 +1,25 @@
 #include <stdlib.h>
 #include <iostream>
+#include <cstring>
+#ifdef __linux__
+#include "Rendering/EglSmoke.h"
+#endif
 #include <Rendering/Engine.h>
 
 // Helpers for setting different simulations
 void SetFramework(const ExpOpt& opt, HairInfo& hair, HeadInfo& head);
 void SetSandBox(HairInfo& hair, HeadInfo& head);
 
-int main()
+int main(int argc, char** argv)
 {
+#ifdef __linux__
+    if (argc == 2 && std::strcmp(argv[1], "--egl-smoke") == 0)
+        return RunEglSmoke();
+#endif
+    if (argc != 1) {
+        std::cerr << "Usage: DigitalSalon [--egl-smoke]\n";
+        return 2;
+    }
 
     // Select mode (experiments/sandbox)
     ExpOpt opt = SANDBOX;

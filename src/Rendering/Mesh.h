@@ -21,7 +21,7 @@ public:
     }
 
     Material(const Material &m) : Ka(m.Ka), Kd(m.Kd), Ks(m.Ks), Ns(m.Ns), tex(m.tex) { }
-    Material &operator = (const Material &m) { Ka = m.Ka; Kd = m.Kd; Ks = m.Ks; Ns = m.Ns; tex = m.tex; }
+    Material &operator = (const Material &m) { Ka = m.Ka; Kd = m.Kd; Ks = m.Ks; Ns = m.Ns; tex = m.tex; return *this; }
 
     ~Material() 
     {        
