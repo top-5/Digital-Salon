@@ -1,19 +1,22 @@
 import json
 import os
 import sys
+from pathlib import Path
 
 import torch
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append("../extern/copilot/codeBook")
+sys.path.append(str(Path(__file__).resolve().parent / "codeBook"))
 import shutil
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "rendering"))
+from drtk_renderer import render_scene
+from PIL import Image
 
-from featureFetcher import device, dist, get_feature
 
 
-data_root = "/disk3/proj_hair/copilot_hair/s3/"
-hair_data_root = "/disk2/datasets/USC-HairSalon/stylist-data/usc-hair-resampled/"
-tmp_folder = "../tmp/copilot/"
+data_root = os.environ.get("DIGITAL_SALON_COPILOT_DATA", str(Path(__file__).resolve().parents[2] / "data/copilot/s3")) + "/"
+hair_data_root = os.environ.get("DIGITAL_SALON_HAIR_DATA", str(Path(__file__).resolve().parents[2] / "data/copilot/usc-hair-resampled")) + "/"
+tmp_folder = str(Path(__file__).resolve().parents[2] / "tmp/copilot") + "/"
 
 if not os.path.exists(tmp_folder):
     os.makedirs(tmp_folder)
@@ -25,8 +28,13 @@ features_fn = label_folder + "codes_usc.json"
 test_fn = label_folder + "test_prompts.json"
 
 
+if not Path(features_fn).is_file():
+    raise FileNotFoundError(f"Supply the Copilot codebook at {features_fn}; see INSTALL.md")
+
 with open(features_fn, "r") as f:
     code_book = json.load(f)
+
+from featureFetcher import device, dist, get_feature
 
 ## prepare the code matrix
 
@@ -65,8 +73,8 @@ if __name__ == "__main__":
         hairname = code_book[k]["name"]
         print(str(i + 1), hairname)
 
-        img_fn = f"{data_root}/image/USC-HairSalon/{hairname}_scene_right.jpg"
         data_fn = f"{hair_data_root}/{hairname}.data"
 
-        shutil.copyfile(img_fn, tmp_folder + "tmp" + str(i + 1) + ".jpg")
+        preview = render_scene(hair=data_fn, yaw=25)
+        Image.fromarray(preview).save(tmp_folder + "tmp" + str(i + 1) + ".jpg")
         shutil.copyfile(data_fn, tmp_folder + "tmp" + str(i + 1) + ".data")

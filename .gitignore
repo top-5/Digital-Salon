@@ -21,3 +21,9 @@ tmp/copilot/*.data
 *.pyc
 
 data/meshes/head.obj
+.venv/
+__pycache__/
+
+data/copilot/
+data/models/
+tmp/*-drtk.png
