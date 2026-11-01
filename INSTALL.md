@@ -1,68 +1,127 @@
 # Installing Digital Salon
 
-Before proceeding to the installation steps, make sure you have CUDA Toolkit 11.6 (or later) installed on your machine. Please follow the installation guide provided by NVIDIA for [Microsoft Windows](https://docs.nvidia.com/cuda/cuda-installation-guide-microsoft-windows/index.html) and [Linux](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/).
+## Linux (tested on Ubuntu 24.04, RTX 4090)
 
-## Core Components
+Use CUDA Toolkit 12.8, CMake 3.24 or newer, a C++17 compiler, and Python 3.12.
+No driver or toolkit installation is performed by the project scripts.
 
-### Linux
-
-Take Ubuntu 22.04 for example, to install third-party libraries, run:
 ```bash
-sudo apt install libeigen3-dev libglm-dev nlohmann-json3-dev libassimp-dev libboost-all-dev libfreeimage3 libfreeimage-dev libfreeimageplus-dev python3-dev
-```
-
-To compile this project using CMake, run:
-```bash
+sudo apt install libeigen3-dev libglm-dev nlohmann-json3-dev libassimp-dev \
+  libboost-program-options-dev libboost-system-dev libboost-filesystem-dev \
+  libfreeimage-dev libglfw3-dev libglew-dev freeglut3-dev libegl-dev \
+  python3.12-dev python3.12-venv ninja-build
 bash scripts/build.sh
+bash scripts/setup_python.sh
 ```
-The built binary file will be generated under `bin`. To execute it, run:
+
+The build defaults to `/usr/local/cuda-12.8/bin/nvcc` and `sm_89`. Override for another host:
+
 ```bash
+bash scripts/build.sh -DCMAKE_CUDA_COMPILER=/path/to/nvcc -DCMAKE_CUDA_ARCHITECTURES=86
+```
+
+`BUILD_JOBS` controls C++ build concurrency; `MAX_JOBS` controls Python CUDA extension builds (both default to 4).
+The working vendored docking-enabled ImGui 1.90.2 WIP is retained. Linux uses system
+Assimp, GLM, GLFW, GLEW and FreeImage rather than bundled headers or Windows binaries.
+The viewer uses GLEW; a separate glad dependency is unnecessary.
+
+Python is installed in `.venv` using pip, including torch 2.9.1+cu128, torchvision
+0.24.1+cu128, numpy 2.5.3, transformers 4.57.1 and diffusers 0.35.2.
+DRTK 0.1.0 is pinned to commit `43c3095d01d0ff435c798518e97e387c784b567f`
+with a verified archive hash in `requirements.txt`. Build it with CUDA 12.8 and
+`TORCH_CUDA_ARCH_LIST=8.9`; the setup script sets these defaults and installs torch
+before building DRTK with `--no-build-isolation`. Setuptools 70.2.0 is needed by DRTK's
+build script. No seed source tree is modified.
+
+## Assets and viewer
+
+The licensed head mesh must be obtained separately and is ignored by Git:
+
+```bash
+curl -fL https://www.avatarneo.com/PinscreenGenericHeadModel.obj -o data/meshes/head.obj
 cd bin
 ./DigitalSalon
 ```
 
-### Windows
+Run from `bin` because the viewer uses relative data/shader paths. The default
+`data/hair/Jewfro.data` is already included. A desktop display is required for the
+interactive viewer. Without DISPLAY it exits at GLFW initialization with a diagnostic.
 
-To install this project on Windows using CMake, the steps are as following:
+The binary also offers a short, display-free EGL pbuffer context/readback probe:
 
-- Replace the path for dependencies in `cmake/windows.cmake`.
-- Configue, Generate and Compile.
-- Copy the DLLs from `extern/lib_bin` to the instalation folder (e.g. `bin` or `build`, it should contain `DigitalSalon.exe`). 
-- Create a folder named `Export` at the installation folder (e.g. `bin/Export`), here everything (hair, animations, volumetric SDF) will be saved. 
-
-### Sanity Check
-
-To check whether your installation is successful, type `"add some wind?"` under `Gen Settings/Copilot` and you will start to see the vibration of hair. At the same time, your terminal will print something like:
-```
-set wind speed.
-Start simulation.
-Building additional VBOs...done
-Building simulation data... generated 200460 particles
-Sending data to solver... there are 200460 particles on GPU. 
-CUDA will use 784 blocks, 256 threads for the hair; also 1024 blocks, 256 threads for the grid
-```
-![sim check](misc/sim-check.png)
-
-## Copilot
-
-To enable Copilot features for text-guided hair generation, you can use the following commands with Miniconda3 to create and activate the Python environment:
 ```bash
-conda create -n digital-salon python=3.10
-conda activate digital-salon
-conda install pytorch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1 pytorch-cuda=12.1 -c pytorch -c nvidia
-pip install -r requirements.txt
+env -u DISPLAY -u WAYLAND_DISPLAY bin/DigitalSalon --egl-smoke
 ```
 
-We provide pre-computed data on USC-HairSalon, including resampled strand data, rendered images, and CLIP embeddings captioned for each hairstyle. They can be downloaded from these OneDrive links ([s3.zip](https://yaleedu-my.sharepoint.com/:u:/g/personal/chengan_he_yale_edu/EUT5lUdAZbFHhvnlyRYF29cBImNMupDEKDMqSnhSF36qgw?e=i4vri5) and [usc-hair-resampled.zip](https://yaleedu-my.sharepoint.com/:u:/g/personal/chengan_he_yale_edu/EZUbewJcyzpCo7iMjwZr7MQBPr_gLmKFzP8_l5rQDbYioQ?e=2bwevv)).
-After downloading and unzipping these files, their paths need to be modified to accommodate your specific case, e.g., Line 14 & 15 (`data_root` and `hair_data_root`) in `extern/copilot/text_to_hair.py`.
+This checks offscreen OpenGL only; it does not run the interactive scene or simulation.
 
-To check wheter copilot features are successfully enabled, type `"I want a funny hairstyle with curls that add volume and texture"` under `Gen Settings/Copilot` and our system will provide 3 renderings for you to choose. You can click either one of them to load the corresponding hair data.
-![copilot check](misc/copilot-check.png)
-If something goes wrong, check whether the conda environment is successfully installed and activated, and make sure `data_root` and `hair_data_root` are set to the correct path in `extern/copilot/text_to_hair.py`.
+## DRTK headless rendering
 
-## ControlNet
+Python rendering uses DRTK's CUDA rasterizer without an OpenGL context or display.
+OBJ meshes are triangulated; binary strands use camera-facing ribbons. The preview
+is shaded RGB on white using an auto-framed orthographic camera. Meshes and strands
+must use the same coordinates when supplied together. `--yaw`, `--radius` and
+`--size` control view angle, ribbon half-width in source units, and output resolution.
 
-To enable rendering features for text-based image generation, you need to clone and install [ControlNet](https://github.com/lllyasviel/ControlNet-v1-1-nightly) according to the instructions provided in their `README`. The checkpoints for Stable Diffusion 1.5 (`v1-5-pruned.ckpt`) and ControlNet Canny (`control_v11p_sd15_canny.pth`) need to be downloaded separately and put in the folder `{controlnet_root}/models`. `controlnet_root` can be an arbitraty path to install ControlNet, but the corresponding value should be updated in `extern/controlnet/canny_controlnet_api.py` (Line 12).
+```bash
+.venv/bin/python extern/rendering/drtk_renderer.py \
+  --mesh data/meshes/head.obj --output tmp/head-drtk.png
+.venv/bin/python extern/rendering/drtk_renderer.py \
+  --hair data/hair/Jewfro.data --yaw 25 --output tmp/hair-drtk.png
+```
 
-To check wheter ControlNet is successfully installed and connected, switch to `Gen Settings/AI Renderer` and type the prompt you would like for the rendering (e.g., `female`, `funny hairstyle with curls that add volume and texture`, `slightly looking left`, `wear a sweater`) and click the `generate` button. It will execute ControlNet's code and after a few seconds, a window with the rendered image will pop up:
-![controlnet check](misc/controlnet-check.png)
+Run `.venv/bin/python scripts/smoke_render.py` for CUDA occlusion checks, head
+and hair PNGs, and DRTK-to-Canny conditioning without model weights.
+
+This is a lightweight preview/conditioning renderer, with flat shading and no
+physically based materials or differentiable camera interface.
+
+## Copilot data
+
+Obtain the original project's [s3.zip](https://yaleedu-my.sharepoint.com/:u:/g/personal/chengan_he_yale_edu/EUT5lUdAZbFHhvnlyRYF29cBImNMupDEKDMqSnhSF36qgw?e=i4vri5)
+and [usc-hair-resampled.zip](https://yaleedu-my.sharepoint.com/:u:/g/personal/chengan_he_yale_edu/EZUbewJcyzpCo7iMjwZr7MQBPr_gLmKFzP8_l5rQDbYioQ?e=2bwevv).
+They are not fetched by setup. Extract so these files exist:
+
+- `data/copilot/s3/label/codes_usc.json` (each entry has `name` and `code`).
+- `data/copilot/usc-hair-resampled/<name>.data` for each codebook hairstyle.
+
+Override roots with `DIGITAL_SALON_COPILOT_DATA` and `DIGITAL_SALON_HAIR_DATA`.
+Copilot uses Hugging Face `openai/clip-vit-base-patch32`; supply/cache its tokenizer
+and weights before using Copilot offline. No models are fetched by the build or smoke checks.
+Chosen hairstyle previews are rendered from strands with DRTK instead of copied
+precomputed JPEGs. The viewer starts the project `.venv` Python directly.
+
+## ControlNet models
+
+The legacy external ControlNet checkout and separate environment are replaced with
+the pinned diffusers pipeline. Supply **diffusers-format directories**, including
+configs, tokenizer, scheduler and weights:
+
+- Stable Diffusion 1.5 in `data/models/stable-diffusion-v1-5/`.
+- SD 1.5 Canny ControlNet (`lllyasviel/control_v11p_sd15_canny`) in `data/models/controlnet-canny/`.
+
+Override with `DIGITAL_SALON_SD_MODEL` and `DIGITAL_SALON_CONTROLNET_MODEL`.
+Old `.ckpt`/`.pth` files alone are not sufficient; convert them outside this setup
+or obtain the corresponding diffusers exports. Model loading uses `local_files_only=True`.
+No weights are downloaded or inference/training runs performed by setup.
+
+The GUI still provides its OpenGL screenshot at `tmp/controlnet/input.png`.
+For a fully headless DRTK mesh/strand conditioning path, run from the repo root:
+
+```bash
+.venv/bin/python extern/controlnet/canny_controlnet_api.py \
+  female curly front "soft lighting" --mesh data/meshes/head.obj \
+  --conditioning-only --output tmp/controlnet/canny-smoke.png
+```
+
+Remove `--conditioning-only` once local models are available to generate an image.
+`--hair` may be supplied with or without `--mesh`. Canny conditioning is written to
+`conditioning.png` beside the requested output. Model-backed Copilot retrieval and
+ControlNet inference require the owner's assets and have not been validated by the
+asset-free smoke checks.
+
+## Windows
+
+The original `cmake/windows.cmake` remains available but has not been validated by
+the Linux upgrade. Adjust its local dependency paths before configuring. The new
+EGL probe is Linux-only.
